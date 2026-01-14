@@ -1,10 +1,9 @@
 # ============================================================
 # core.py # Donatı seçimi ve moment-As dönüşümü
 # ============================================================
-from ast import Tuple
-from typing import Optional
+from typing import Optional, Tuple
 from constant import PHI_GRID
-from models import BarChoice, MainRebarLayout, MainRebarLayout
+from models import BarChoice, MainRebarLayout
 from utils import best_spacing_for_phi, ks_from_Kcalc
 
 def calc_K_and_As_from_M(
@@ -36,6 +35,7 @@ def choose_main_rebar_half_half_same_phi(
     s_max_main_mm: int,
     s_min_main_mm: int = 70,
     phi_min_main: int = 8,
+    preferred_s_cm: Optional[list[float]] = None,
 ) -> MainRebarLayout:
     z = BarChoice(0, 0.0, 0.0, 0.0, 0.0)
     if As_req_mm2_per_m <= 1e-12:
@@ -44,12 +44,17 @@ def choose_main_rebar_half_half_same_phi(
     As_half = As_req_mm2_per_m / 2.0
     best_layout: Optional[MainRebarLayout] = None
 
+    # For "50% straight + 50% pilye" detailing, each set can be spaced wider,
+    # while the *combined* effective spacing is roughly s/2.
+    # Therefore we allow each set up to 2*s_max_main_mm.
+    s_max_each_mm = int(2 * s_max_main_mm)
+
     for phi in PHI_GRID:
         if phi < phi_min_main:
             continue
 
-        straight = best_spacing_for_phi(As_half, phi, s_max_main_mm, s_min_main_mm)
-        pilye = best_spacing_for_phi(As_half, phi, s_max_main_mm, s_min_main_mm)
+        straight = best_spacing_for_phi(As_half, phi, s_max_each_mm, s_min_main_mm, preferred_s_cm=preferred_s_cm)
+        pilye = best_spacing_for_phi(As_half, phi, s_max_each_mm, s_min_main_mm, preferred_s_cm=preferred_s_cm)
         if straight is None or pilye is None:
             continue
 
@@ -67,6 +72,7 @@ def choose_single_layer_rebar(
     s_max_mm: int,
     s_min_mm: int = 70,
     phi_min: int = 8,
+    preferred_s_cm: Optional[list[float]] = None,
 ) -> BarChoice:
     if As_req_mm2_per_m <= 1e-12:
         return BarChoice(0, 0.0, 0.0, 0.0, 0.0)
@@ -75,7 +81,7 @@ def choose_single_layer_rebar(
     for phi in PHI_GRID:
         if phi < phi_min:
             continue
-        cand = best_spacing_for_phi(As_req_mm2_per_m, phi, s_max_mm, s_min_mm)
+        cand = best_spacing_for_phi(As_req_mm2_per_m, phi, s_max_mm, s_min_mm, preferred_s_cm=preferred_s_cm)
         if cand is None:
             continue
         if best is None or cand.ratio < best.ratio:

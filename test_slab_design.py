@@ -144,6 +144,14 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(rho_min_oneway("S220"), 0.003)
         self.assertEqual(rho_min_oneway("B500C"), 0.002)
 
+    def test_rho_min_twoway_dir(self):
+        """Test minimum reinforcement ratio per direction for two-way slabs"""
+        from utils import rho_min_twoway_dir
+
+        self.assertEqual(rho_min_twoway_dir("S420"), 0.0015)
+        self.assertEqual(rho_min_twoway_dir("B500C"), 0.0015)
+        self.assertEqual(rho_min_twoway_dir("S220"), 0.002)
+
 
 class TestDesign(unittest.TestCase):
     """Tests for design.py functions"""
@@ -617,6 +625,171 @@ class TestIntegration(unittest.TestCase):
         # One direction should have main reinforcement, other should have distribution
         main_moment = max(out_x.M_pos_kNm_per_m, out_y.M_pos_kNm_per_m)
         self.assertGreater(main_moment, 0)
+
+
+class TestSystemDesignExample8_2(unittest.TestCase):
+    """Regression checks for textbook-style Example 8-2 moment workflow."""
+
+    def test_example_8_2_moments(self):
+        from system_design import (
+            balance_support_moments,
+            moments_cantilever,
+            moments_one_way,
+            moments_two_way,
+        )
+
+        # From the book (Example 8-2):
+        # h = 140mm => g_self = 0.14*25 = 3.5; g_add = 1.5 => g=5.0
+        # q = 3.5 => pd = 1.4*5.0 + 1.6*3.5 = 12.6 kN/m^2
+        pd = 12.6
+
+        # D1 panel: 6.0m x 5.0m with 250mm beams => net spans 5.75 x 4.75, m≈1.21
+        # D1 is two-way, "two adjacent edges discontinuous" => slab_case=3
+        d1_mom, d1_coef = moments_two_way(
+            pd=pd,
+            Lsn_short=4.75,
+            Lsn_long=5.75,
+            slab_case=3,
+            x_is_long=True,  # x=6.0 is the long direction
+            m_override=1.2,  # textbook uses gross ratio m=6/5
+        )
+
+        # Expected (book): M_long_pos=10.5, M_long_neg=13.9, M_short_pos=13.4, M_short_neg=17.6
+        self.assertAlmostEqual(d1_mom.Mx_pos, 10.5, places=1)
+        self.assertAlmostEqual(d1_mom.Mx_neg, 13.9, places=1)
+        self.assertAlmostEqual(d1_mom.My_pos, 13.4, places=1)
+        self.assertAlmostEqual(d1_mom.My_neg, 17.6, places=1)
+
+        # D2 panel: one-way (m>2). Book uses L=2.45m for strip moments (fixed–pinned).
+        d2_Mpos, d2_Mneg, _ = moments_one_way(pd=pd, L=2.45, coeff_type="fixed_pinned")
+        self.assertAlmostEqual(d2_Mpos, 5.32, places=2)
+        self.assertAlmostEqual(d2_Mneg, 9.45, places=2)
+
+        # Balcony BD: cantilever L = 1.5 - 0.25/2 = 1.375m
+        bd_Mneg = moments_cantilever(pd=pd, L=1.375)
+        self.assertAlmostEqual(bd_Mneg, 11.91, places=2)
+
+        # Moment balancing at the shared support between D1 and D2 (book uses 2/3 redistribution)
+        # Use spans perpendicular to the support: D1 has 5.0m, D2 has 2.45m.
+        d1_bal, d2_bal, info = balance_support_moments(
+            M_a=d1_mom.My_neg,
+            M_b=d2_Mneg,
+            span_perp_a=5.0,
+            span_perp_b=2.45,
+        )
+        self.assertTrue(info["applied"])
+        self.assertAlmostEqual(d1_bal, 15.8, places=1)
+        self.assertAlmostEqual(d2_bal, 13.1, places=1)
+
+
+class TestSystemSolverExample8_2(unittest.TestCase):
+    def test_example_8_2_system_thickness_and_supports(self):
+        from system_solver import compute_system, example_8_2_system
+
+        system = example_8_2_system()
+        h_mm, results, hmins, pd = compute_system(
+            system=system,
+            concrete="C25",
+            steel="S420",
+            cover_mm=20.0,
+            d_y_reduction_mm=10.0,
+            g_additional=1.5,
+            q_live=3.5,
+        )
+
+        # Book chooses h = 140mm (common).
+        self.assertEqual(h_mm, 140.0)
+        self.assertAlmostEqual(pd, 12.6, places=2)
+
+        # D1/D2 balancing should reflect in the stored moments
+        self.assertAlmostEqual(results["D1"].moments_design.My_neg, 15.8, places=1)
+        self.assertAlmostEqual(results["D2"].moments_design.My_neg, 13.1, places=1)
+
+        # D1/BD envelope should make both equal to the larger (D1 support)
+        self.assertAlmostEqual(results["D1"].moments_design.Mx_neg, 13.9, places=1)
+        self.assertAlmostEqual(results["BD"].moments_design.Mcant_neg, 13.9, places=1)
+
+
+class TestSystemSolverExample8_1(unittest.TestCase):
+    def test_example_8_1_moments_match_book(self):
+        from system_solver import compute_system, example_8_1_system
+        from system_solver import support_extra_bars
+
+        system = example_8_1_system()
+        h_mm, results, hmins, pd = compute_system(
+            system=system,
+            concrete="C25",
+            steel="S420",
+            cover_mm=20.0,
+            d_y_reduction_mm=10.0,
+            g_additional=1.5,
+            q_live=3.5,
+        )
+
+        self.assertEqual(h_mm, 140.0)
+        self.assertAlmostEqual(pd, 12.6, places=2)
+
+        # Raw moments (before support envelope)
+        d1 = results["D1"].moments_raw
+        d2 = results["D2"].moments_raw
+        bd = results["BD"].moments_raw
+
+        self.assertAlmostEqual(d1.Mx_pos, 11.29, places=2)
+        self.assertAlmostEqual(d1.Mx_neg, 14.92, places=2)
+        self.assertAlmostEqual(d1.My_pos, 8.87, places=2)
+
+        self.assertAlmostEqual(d2.Mx_neg, 14.11, places=2)
+        self.assertAlmostEqual(d2.Mx_pos, 10.63, places=2)
+        self.assertAlmostEqual(d2.My_pos, 9.55, places=2)
+
+        self.assertAlmostEqual(bd.Mcant_neg, 11.91, places=2)
+
+        # Design moments at supports (after envelope)
+        self.assertAlmostEqual(results["D1"].moments_design.Mx_neg, 14.92, places=2)
+        self.assertAlmostEqual(results["D2"].moments_design.Mx_neg, 14.92, places=2)
+        self.assertAlmostEqual(results["BD"].moments_design.Mcant_neg, 14.11, places=2)
+
+        # Bottom reinforcement selection should match the book table (phi8 with large spacings)
+        d1x = results["D1"].design_x.main_bottom_layout.straight
+        d1y = results["D1"].design_y.main_bottom_layout.straight
+        d2x = results["D2"].design_x.main_bottom_layout.straight
+        d2y = results["D2"].design_y.main_bottom_layout.straight
+        self.assertEqual((d1x.phi, d1x.s_cm), (8, 36.0))
+        self.assertEqual((d2x.phi, d2x.s_cm), (8, 38.0))
+        self.assertEqual((d1y.phi, d1y.s_cm), (8, 40.0))
+        self.assertEqual((d2y.phi, d2y.s_cm), (8, 38.0))
+
+        # Extra top bars at shared supports (book uses Ø8/300 and Ø8/200)
+        fck = 25.0
+        d_m_x = 0.12  # h=140, cover=20
+        # D1/D2 support: existing are pilyes from both slabs in X direction
+        extra_k102 = support_extra_bars(
+            name="D1/D2",
+            M_kNm_per_m=14.92,
+            d_m=d_m_x,
+            fck=fck,
+            steel="S420",
+            existing_bars=[
+                results["D1"].design_x.main_bottom_layout.pilye,
+                results["D2"].design_x.main_bottom_layout.pilye,
+            ],
+            s_max_mm=300,
+            phi_min=8,
+        )
+        self.assertEqual((extra_k102.extra_bars.phi, extra_k102.extra_bars.s_cm), (8, 30.0))
+
+        # D2/BD support: existing is D2 pilye in X direction
+        extra_bd = support_extra_bars(
+            name="D2/BD",
+            M_kNm_per_m=14.11,
+            d_m=d_m_x,
+            fck=fck,
+            steel="S420",
+            existing_bars=[results["D2"].design_x.main_bottom_layout.pilye],
+            s_max_mm=300,
+            phi_min=8,
+        )
+        self.assertEqual((extra_bd.extra_bars.phi, extra_bd.extra_bars.s_cm), (8, 20.0))
 
 
 if __name__ == "__main__":

@@ -47,3 +47,37 @@ Store the final outputs in a structured format:
 • Final thickness and section dimensions.
 • Reinforcement diameters and spacings (e.g., ϕ10/130).
 • Reinforcement Sketches: Automatically generate diagrams for straight and "pilye" (bent) bars.
+
+---
+
+## Multi-panel (System) problems (Examples 8-1 / 8-2)
+
+Single-panel design is not enough for textbook questions like `D1 + D2 + BD (balcony)` because you must handle **multiple connected panels** and **shared support rules**.
+
+Supported additions:
+
+- **Panel types**: `two_way`, `one_way`, `cantilever`
+- **Moments**:
+  - two-way: ABAK coefficients (`SLAB_CASES`)
+  - one-way: strip coefficients (`ONEWAY_COEFFICIENTS`) incl. **fixed–pinned** (9/128 and 1/8)
+  - cantilever: \(M=p_d L^2/2\)
+- **Shared supports**:
+  - **moment balancing** (redistribute \(2/3\) of difference when \(\min/\max<0.8\))
+  - **envelope** (take max of competing support moments)
+- **Common thickness**: choose one `h` as max of each panel’s `h_min`.
+
+### Run interactively
+
+```bash
+python3 main.py
+```
+
+Choose **Mode 2** (“Sistem (Örnek 8-2)”) to print:
+- selected common thickness
+- system moments per panel
+- per-panel bar selections
+
+Choose **Mode 3** (“Sistem (Örnek 8-1)”) to print:
+- system moments (raw + design at supports)
+- extra support bars (Ek donatı) based on existing pilye bars
+- an approximate line-load diagram transferred to beam `K102` (45° method)

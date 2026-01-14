@@ -110,7 +110,8 @@ def best_spacing_for_phi(
     As_req_mm2_per_m: float,
     phi: int,
     s_max_mm: int,
-    s_min_mm: int = 70
+    s_min_mm: int = 70,
+    preferred_s_cm: Optional[List[float]] = None,
 ) -> Optional[BarChoice]:
     if As_req_mm2_per_m <= 1e-12:
         return BarChoice(phi, 0.0, 0.0, 0.0, 0.0)
@@ -123,6 +124,19 @@ def best_spacing_for_phi(
 
     pj = PHI_GRID.index(phi)
     best: Optional[BarChoice] = None
+
+    if preferred_s_cm:
+        for s in preferred_s_cm:
+            if s < s_min_cm or s > s_max_cm:
+                continue
+            As_cm2 = as_cm2_per_m(phi, s)
+            if As_cm2 + 1e-12 < As_req_cm2:
+                continue
+            ratio = As_cm2 / As_req_cm2
+            cand = BarChoice(phi, s, As_cm2 * 100.0, As_cm2, ratio)
+            if best is None or cand.ratio < best.ratio:
+                best = cand
+        return best
 
     for si, s in enumerate(S_GRID):
         if s < s_min_cm or s > s_max_cm:
@@ -166,6 +180,22 @@ def rho_min_oneway(steel: str) -> float:
     if "220" in s:
         return 0.003
     return 0.002  # S420 ve S500/B500 için
+
+
+def rho_min_twoway_dir(steel: str) -> float:
+    """
+    Minimum reinforcement ratio per direction for two-way slabs.
+
+    Many Turkish RC textbooks use:
+    - S420/S500/B500: ρ_min,x = ρ_min,y = 0.0015
+    - Lower grade steels may require higher minimum ratios.
+
+    Note: total minimum is checked separately (e.g., ρx + ρy ≥ 0.0035).
+    """
+    s = steel.strip().upper()
+    if "220" in s:
+        return 0.002
+    return 0.0015
 
 
 def K_row_concrete_value(row: Tuple, fck: float) -> float:

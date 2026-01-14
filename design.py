@@ -7,7 +7,7 @@ from models import DesignOut, InputData, ThicknessCheck, LoadAnalysis
 from core import calc_K_and_As_from_M, choose_distribution_rebar, choose_main_rebar_half_half_same_phi, choose_single_layer_rebar
 from utils import (
     edge_continuity_note_for_case, interp_piecewise, parse_concrete, rho_min_oneway,
-    calculate_net_span, calculate_loads, validate_coefficient_method_applicability
+    rho_min_twoway_dir, calculate_net_span, calculate_loads, validate_coefficient_method_applicability
 )
 
 
@@ -269,8 +269,8 @@ def compute_twoway(
     _, _, Asy_neg_M = calc_K_and_As_from_M(My_neg, d_m, fck, data.steel)
     
     # Minimum reinforcement checks
-    # 1. Each direction: ρ >= 0.002
-    rho_min_single = rho_min_oneway(data.steel)
+    # 1. Each direction: two-way minimum per direction
+    rho_min_single = rho_min_twoway_dir(data.steel)
     As_min_single = rho_min_single * b_mm * d_mm
     
     Asx_pos_req = max(Asx_pos_M, As_min_single)

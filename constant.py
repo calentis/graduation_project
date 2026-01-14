@@ -11,6 +11,11 @@ ONEWAY_COEFFICIENTS = {
         "pos": 1/8,       # Simple span: M = w*Ln²/8
         "neg": 0.0        # No negative moment
     },
+    # Fixed–pinned (ankastre–mafsallı): midspan 9wL^2/128, fixed-end wL^2/8
+    "fixed_pinned": {
+        "pos": 9/128,
+        "neg_cont": 1/8
+    },
     "one_end_continuous": {
         "pos": 1/11,      # Positive moment at midspan
         "neg_cont": 1/10  # Negative moment at continuous end
@@ -92,7 +97,10 @@ K_TABLE_ROWS = [
 CONC_NODES = [25.0, 30.0, 35.0, 40.0, 45.0, 50.0]
 
 PHI_GRID = [6, 7, 8, 10, 12, 14, 16, 18, 20, 22, 24]
-S_GRID = [x / 2 for x in range(14, 41)]  # 7.0 .. 20.0 cm
+# Spacing grid in cm.
+# - 7..20cm: 5mm steps (covers dense reinforcement like 12.5cm, 17.5cm, etc.)
+# - 22..40cm: 20mm steps (avoids non-standard spacings like 37cm; matches textbook choices)
+S_GRID = [x / 2 for x in range(14, 41)] + [x for x in range(22, 41, 2)]
 
 M_NODES = [1.00, 1.10, 1.20, 1.30, 1.40, 1.50, 1.75, 2.00]
 
