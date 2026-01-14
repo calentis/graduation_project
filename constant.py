@@ -20,7 +20,34 @@ ONEWAY_COEFFICIENTS = {
         "neg": 1/11       # Negative moment at supports
     },
     "cantilever": {
-        "neg": 1/2        # M = w*Ln²/2
+        "pos": 0.0,       # No positive moment (unless for distribution bars)
+        "neg": 1/2        # M = w*Ln²/2 (at fixed end)
+    }
+}
+
+# ============================================================
+# ONE-WAY SLAB TYPES FOR MULTI-SLAB SYSTEMS
+# ============================================================
+ONEWAY_SPAN_TYPES = {
+    "simple": {
+        "description": "Basit mesnetli (her iki ucu serbest)",
+        "M_pos_coef": 9/128,   # For parabolic (9pL²/128)
+        "M_neg_coef": 0.0,
+    },
+    "one_end_fixed": {
+        "description": "Bir ucu ankastre, bir ucu serbest",
+        "M_pos_coef": 9/128,   # Midspan
+        "M_neg_coef": 1/8,     # At fixed end
+    },
+    "both_ends_fixed": {
+        "description": "Her iki ucu ankastre",
+        "M_pos_coef": 1/24,    # Midspan (for uniform load)
+        "M_neg_coef": 1/12,    # At supports
+    },
+    "cantilever": {
+        "description": "Konsol (balkon) döşeme",
+        "M_pos_coef": 0.0,
+        "M_neg_coef": 1/2,     # M = pL²/2 at fixed end
     }
 }
 

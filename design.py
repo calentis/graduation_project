@@ -333,6 +333,18 @@ def thickness_check_oneway(Lsn: float, h_mm: float) -> ThicknessCheck:
     return ThicknessCheck(h_min, ok, note)
 
 
+def thickness_check_cantilever(Lsn: float, h_mm: float) -> ThicknessCheck:
+    """
+    Cantilever slab thickness check per TS500
+    h >= Ln/12 (for cantilevers)
+    """
+    ln = max(Lsn, 0.10)
+    h_min = max((ln * 1000) / 12.0, 80)  # Cantilever: Ln/12
+    ok = h_mm >= h_min
+    note = f"Konsol döşeme: h_min=Lsn/12={ln:.3f}×1000/12={h_min:.1f}mm (min 80mm)"
+    return ThicknessCheck(h_min, ok, note)
+
+
 def thickness_check_twoway(
     Lsn_short: float, Lsn_long: float, h_mm: float, alpha_s: float = 0.0
 ) -> ThicknessCheck:
