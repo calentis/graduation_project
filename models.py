@@ -5,6 +5,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 from datetime import datetime
+from typing import Dict, List, Literal, Optional as Opt
 
 
 @dataclass
@@ -156,3 +157,97 @@ class SlabDesignResult:
     # Metadata
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     notes: str = ""
+
+
+# ============================================================
+# Slab system (multi-panel) models
+# ============================================================
+
+PanelType = Literal["two_way", "one_way", "cantilever"]
+SpanDir = Literal["x", "y"]
+
+
+@dataclass(frozen=True)
+class PanelSpec:
+    """
+    Describes a slab panel for system-level examples (e.g., D1/D2/BD).
+
+    Conventions:
+    - lx/ly are gross spans in meters.
+    - beam widths are used for net spans (Lsn = L - wL/2 - wR/2).
+    """
+
+    name: str
+    panel_type: PanelType
+    lx: float
+    ly: float
+
+    # beam widths (mm) used to compute net spans
+    beam_w_left_x: float = 250.0
+    beam_w_right_x: float = 250.0
+    beam_w_left_y: float = 250.0
+    beam_w_right_y: float = 250.0
+
+    # Two-way: ABAK slab_case (1..7)
+    slab_case: int = 7
+
+    # One-way/cantilever: which direction spans
+    span_dir: SpanDir = "y"
+
+    # One-way: coefficient family (e.g., "fixed_pinned", "simple", ...)
+    oneway_coeff_type: str = "simple"
+
+    # Thickness check options (alpha_s used in some two-way formulas)
+    alpha_s_thickness: float = 0.0
+
+    # Optional moment masks (some ABAK cases provide coefficients that a given sketch may not use)
+    include_Mx_neg: bool = True
+    include_My_neg: bool = True
+
+    # For cantilevers (and thickness checks), allow different effective lengths
+    thickness_span_override_m: Opt[float] = None
+    moment_span_override_m: Opt[float] = None
+
+    # Optional preferred bar spacings (cm) to match typical detailing choices
+    preferred_s_cm_x: Opt[List[float]] = None
+    preferred_s_cm_y: Opt[List[float]] = None
+
+
+@dataclass(frozen=True)
+class SupportBalanceLink:
+    """
+    Balance two moments at a shared support between two panels.
+    - moment_key must match one of: "Mx_neg", "My_neg"
+    - span_perp_* are the spans perpendicular to that support line (m), used as rigidity proxy.
+    """
+
+    panel_a: str
+    panel_b: str
+    moment_key_a: Literal["Mx_neg", "My_neg"]
+    moment_key_b: Literal["Mx_neg", "My_neg"]
+    span_perp_a: float
+    span_perp_b: float
+
+
+@dataclass(frozen=True)
+class SupportEnvelopeLink:
+    """
+    Take an envelope (max) between two moments at a shared support.
+    Used for e.g. (slab support moment) vs (cantilever fixed-end moment).
+    """
+
+    panel_a: str
+    panel_b: str
+    moment_key_a: Literal["Mx_neg", "My_neg", "Mcant_neg"]
+    moment_key_b: Literal["Mx_neg", "My_neg", "Mcant_neg"]
+
+
+@dataclass(frozen=True)
+class SlabSystemInput:
+    """System-level input: multiple panels + how they interact."""
+
+    panels: List[PanelSpec]
+    balance_links: List[SupportBalanceLink] = field(default_factory=list)
+    envelope_links: List[SupportEnvelopeLink] = field(default_factory=list)
+    # Optional: choose a thicker common slab (textbooks often pick e.g. 140mm)
+    h_override_mm: Opt[float] = None

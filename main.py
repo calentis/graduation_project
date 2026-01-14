@@ -5,6 +5,15 @@ from constant import SLAB_CASES
 from design import compute
 from models import BarChoice, DesignOut, InputData, ThicknessCheck, LoadAnalysis
 from utils import validate_concrete_grade, validate_beam_width, calculate_loads
+from system_solver import (
+    compute_system,
+    example_8_1_system,
+    example_8_2_system,
+    example_two_d1_two_balconies,
+    support_extra_bars,
+    sum_line_loads_at_points,
+    two_way_edge_line_load_points,
+)
 
 
 def print_choice(prefix: str, c: BarChoice):
@@ -98,6 +107,107 @@ def main():
     print("  DÖŞEME TASARIMI (TS500 / TBDY-2018)")
     print("  ABAK Tabloları + Net Açıklık + Yük Kombinasyonu")
     print("="*80)
+
+    mode = get_input("\nMod seçimi: 1) Tek panel  2) Sistem (Örnek 8-2)  3) Sistem (Örnek 8-1)  4) Sistem (2xD1 + 2xBD)", int, 1)
+    if mode in (2, 3, 4):
+        if mode == 2:
+            print("\n--- Örnek 8-2 (D1 + D2 + BD) sistem hesabı ---")
+            system = example_8_2_system()
+        else:
+            if mode == 3:
+                print("\n--- Örnek 8-1 (D1 + D2 + BD) sistem hesabı ---")
+                system = example_8_1_system()
+            else:
+                print("\n--- Sistem (2xD1 + 2xBD) ---")
+                system = example_two_d1_two_balconies()
+
+        conc = get_input("Beton sınıfı (C25..C50)", str, "C25").upper()
+        conc_ok, conc_msg = validate_concrete_grade(conc)
+        print(f"  {conc_msg}")
+        steel = get_input("Çelik sınıfı (S420 / S220 / B500C)", str, "S420").upper()
+        cover_mm = get_input("Paspayı (mm)", float, 20.0)
+        g_additional = get_input("Kaplama+Sıva (kN/m²)", float, 1.5)
+        q_live = get_input("Hareketli yük (kN/m²)", float, 3.5)
+
+        h_mm, results, hmins, pd = compute_system(
+            system=system,
+            concrete=conc,
+            steel=steel,
+            cover_mm=cover_mm,
+            d_y_reduction_mm=10.0,
+            g_additional=g_additional,
+            q_live=q_live,
+        )
+
+        print("\n--- Kalınlık seçimi (ortak) ---")
+        for k, v in hmins.items():
+            print(f"  {k}: h_min ≈ {v:.1f} mm")
+        print(f"  Seçilen ortak kalınlık: h = {h_mm:.0f} mm")
+
+        print("\n--- Yükler ---")
+        g_self, g_total, _, _ = calculate_loads(h_mm, g_additional, q_live)
+        print(f"  g_self={g_self:.2f}  g={g_total:.2f}  q={q_live:.2f}  pd={pd:.2f} kN/m²")
+
+        print("\n--- Sistem Momentleri (kNm/m) ---")
+        for name, r in results.items():
+            m = r.moments_raw
+            md = r.moments_design
+            print(
+                f"  {name}: "
+                f"Mx+={m.Mx_pos:.2f}, Mx-={m.Mx_neg:.2f}, "
+                f"My+={m.My_pos:.2f}, My-={m.My_neg:.2f}, "
+                f"Mcant-={m.Mcant_neg:.2f} | "
+                f"DESIGN: Mx-={md.Mx_neg:.2f}, My-={md.My_neg:.2f}, Mcant-={md.Mcant_neg:.2f}"
+            )
+
+        print("\n--- Donatı (panel bazında) ---")
+        for name, r in results.items():
+            print(f"\n[{name}]")
+            print_design(r.design_x)
+            print_design(r.design_y)
+
+        if mode == 3:
+            # Support extra bars as in the textbook table
+            fck = 25.0 if conc.startswith("C25") else float(conc[1:])
+            d_m_x = max((h_mm - cover_mm) / 1000.0, 1e-6)
+            print("\n--- Mesnet Ek Donatı (Örnek 8-1 yaklaşımı) ---")
+            if "D1" in results and "D2" in results:
+                extra_k102 = support_extra_bars(
+                    name="D1/D2",
+                    M_kNm_per_m=results["D1"].moments_design.Mx_neg,
+                    d_m=d_m_x,
+                    fck=fck,
+                    steel=steel,
+                    existing_bars=[
+                        results["D1"].design_x.main_bottom_layout.pilye,
+                        results["D2"].design_x.main_bottom_layout.pilye,
+                    ],
+                )
+                print(f"  D1/D2: Md={extra_k102.M_kNm_per_m:.2f} → As_req={extra_k102.As_req_mm2_per_m:.0f}, As_var={extra_k102.As_existing_mm2_per_m:.0f}, As_ek={extra_k102.extra_bars.As_prov_mm2_per_m:.0f} → Ø{extra_k102.extra_bars.phi}/{extra_k102.extra_bars.s_cm:.0f}cm")
+
+            if "D2" in results and "BD" in results:
+                extra_bd = support_extra_bars(
+                    name="D2/BD",
+                    M_kNm_per_m=results["D2"].moments_raw.Mx_neg,  # raw D2 support at balcony side (before D1 envelope)
+                    d_m=d_m_x,
+                    fck=fck,
+                    steel=steel,
+                    existing_bars=[results["D2"].design_x.main_bottom_layout.pilye],
+                )
+                print(f"  D2/BD: Md={extra_bd.M_kNm_per_m:.2f} → As_req={extra_bd.As_req_mm2_per_m:.0f}, As_var={extra_bd.As_existing_mm2_per_m:.0f}, As_ek={extra_bd.extra_bars.As_prov_mm2_per_m:.0f} → Ø{extra_bd.extra_bars.phi}/{extra_bd.extra_bars.s_cm:.0f}cm")
+
+            # K102 beam load transfer (approx. 45-degree method, service load)
+            g_self, g_total, _, _ = calculate_loads(h_mm, g_additional, q_live)
+            w_service = g_total + q_live
+            print("\n--- K102 kirişine aktarılan yük (yaklaşık, 45° yöntemi) ---")
+            # D1 contributes with a=4.25, b=5.30; D2 with a=4.40, b=5.30 (beam along 5.30m)
+            pts_d1 = two_way_edge_line_load_points(w_area=w_service, a_perp=4.25, b_along=5.30)
+            pts_d2 = two_way_edge_line_load_points(w_area=w_service, a_perp=4.40, b_along=5.30)
+            pts_sum = sum_line_loads_at_points([pts_d1, pts_d2])
+            for y, w in pts_sum:
+                print(f"  y={y:.3f}m : w={w:.2f} kN/m")
+
+        return
 
     # Geometry inputs
     print("\n--- Geometri Girdileri ---")
