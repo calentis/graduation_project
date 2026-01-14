@@ -5,7 +5,15 @@ from constant import SLAB_CASES
 from design import compute
 from models import BarChoice, DesignOut, InputData, ThicknessCheck, LoadAnalysis
 from utils import validate_concrete_grade, validate_beam_width, calculate_loads
-from system_solver import compute_system, example_8_1_system, example_8_2_system, support_extra_bars, sum_line_loads_at_points, two_way_edge_line_load_points
+from system_solver import (
+    compute_system,
+    example_8_1_system,
+    example_8_2_system,
+    example_two_d1_two_balconies,
+    support_extra_bars,
+    sum_line_loads_at_points,
+    two_way_edge_line_load_points,
+)
 
 
 def print_choice(prefix: str, c: BarChoice):
@@ -100,14 +108,18 @@ def main():
     print("  ABAK Tabloları + Net Açıklık + Yük Kombinasyonu")
     print("="*80)
 
-    mode = get_input("\nMod seçimi: 1) Tek panel  2) Sistem (Örnek 8-2)  3) Sistem (Örnek 8-1)", int, 1)
-    if mode in (2, 3):
+    mode = get_input("\nMod seçimi: 1) Tek panel  2) Sistem (Örnek 8-2)  3) Sistem (Örnek 8-1)  4) Sistem (2xD1 + 2xBD)", int, 1)
+    if mode in (2, 3, 4):
         if mode == 2:
             print("\n--- Örnek 8-2 (D1 + D2 + BD) sistem hesabı ---")
             system = example_8_2_system()
         else:
-            print("\n--- Örnek 8-1 (D1 + D2 + BD) sistem hesabı ---")
-            system = example_8_1_system()
+            if mode == 3:
+                print("\n--- Örnek 8-1 (D1 + D2 + BD) sistem hesabı ---")
+                system = example_8_1_system()
+            else:
+                print("\n--- Sistem (2xD1 + 2xBD) ---")
+                system = example_two_d1_two_balconies()
 
         conc = get_input("Beton sınıfı (C25..C50)", str, "C25").upper()
         conc_ok, conc_msg = validate_concrete_grade(conc)

@@ -240,8 +240,10 @@ def choose_common_thickness_mm(system: SlabSystemInput, *, h_min_floor_mm: float
         h_max = max(h_max, hmin)
 
     h_common = (int(h_max + 9) // 10) * 10
+    # If thickness is explicitly given (e.g., textbook says h=0.14m everywhere),
+    # use it as-is (still returning hmins for reference).
     if system.h_override_mm is not None:
-        h_common = max(h_common, float(system.h_override_mm))
+        return float(system.h_override_mm), hmins
     return float(h_common), hmins
 
 
@@ -778,6 +780,73 @@ def example_8_1_system() -> SlabSystemInput:
             SupportEnvelopeLink(panel_a="D1", panel_b="D2", moment_key_a="Mx_neg", moment_key_b="Mx_neg"),
             # D2/BD support moment (use max between D2 support and balcony cantilever)
             SupportEnvelopeLink(panel_a="D2", panel_b="BD", moment_key_a="Mx_neg", moment_key_b="Mcant_neg"),
+        ],
+    )
+
+
+def example_two_d1_two_balconies() -> SlabSystemInput:
+    """
+    System from the latest sketch:
+    - Two adjacent square panels (D1-left, D1-right), each 6.0m x 6.0m with 250mm beams.
+      Assumption: each panel behaves as ABAK case 3 (two adjacent edges discontinuous),
+      with the two continuous edges being (1) the shared middle support and (2) the balcony side (if any).
+    - Two balconies (top-right, bottom-left), each cantilever with effective moment length 1.375m.
+    - Support envelopes at balcony connections: max(M_slab_support, M_cantilever).
+    """
+
+    d1_left = PanelSpec(
+        name="D1_L",
+        panel_type="two_way",
+        lx=6.0,
+        ly=6.0,
+        beam_w_left_x=250,
+        beam_w_right_x=250,
+        beam_w_left_y=250,
+        beam_w_right_y=250,
+        slab_case=3,
+        alpha_s_thickness=0.0,
+    )
+    d1_right = PanelSpec(
+        name="D1_R",
+        panel_type="two_way",
+        lx=6.0,
+        ly=6.0,
+        beam_w_left_x=250,
+        beam_w_right_x=250,
+        beam_w_left_y=250,
+        beam_w_right_y=250,
+        slab_case=3,
+        alpha_s_thickness=0.0,
+    )
+
+    bd_top = PanelSpec(
+        name="BD_TOP",
+        panel_type="cantilever",
+        lx=1.50,
+        ly=6.0,
+        span_dir="x",
+        thickness_span_override_m=1.25,
+        moment_span_override_m=1.375,
+    )
+    bd_bot = PanelSpec(
+        name="BD_BOT",
+        panel_type="cantilever",
+        lx=1.50,
+        ly=6.0,
+        span_dir="x",
+        thickness_span_override_m=1.25,
+        moment_span_override_m=1.375,
+    )
+
+    return SlabSystemInput(
+        panels=[d1_left, d1_right, bd_top, bd_bot],
+        h_override_mm=140.0,
+        envelope_links=[
+            # balcony-to-slab support envelopes:
+            # top balcony connects to right panel (use slab support in Y at top edge => My_neg)
+            SupportEnvelopeLink(panel_a="D1_R", panel_b="BD_TOP", moment_key_a="My_neg", moment_key_b="Mcant_neg"),
+            # bottom balcony connects to left panel (use slab support in Y at bottom edge => My_neg)
+            SupportEnvelopeLink(panel_a="D1_L", panel_b="BD_BOT", moment_key_a="My_neg", moment_key_b="Mcant_neg"),
         ],
     )
 
