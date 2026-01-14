@@ -1,49 +1,105 @@
-# Slab Design Automation Programming: Required Steps
-Below are the required steps to structure your design automation programming, incorporating the coefficient method.
+# TS500 Slab System Designer
 
-1. Pre-Processing and Input Module
-Define the building attributes and geometry.
-• Geometric Input: Define span lengths (Lx ,Ly), beam widths, and story heights.
-• Material Selection: Input material and pick characteristic strengths for concrete (fck) and steel (fyk). For Turkish design, the minimum concrete grade is C25.
-• Beam Width Check: Beam width must meet the criteria of minimum 250mm: *Lbeam ≥ 250*.
-• Calculate Net Spans: *Lsn = Lx,y - (w_left/2) - (w_right/2)*.
-• Slab Type Determination: Calculate the ratio *m=Llong/Lshort*.
-    ◦ m>2: One-way slab (Tek Doğrultulu).
-    ◦ m≤2: Two-way slab (Çift Doğrultulu).
+A professional Python-based structural engineering tool for designing reinforced concrete slab systems according to **TS500 (2000)** and **TBDY (2018)** standards.
 
-2. Geometric Verification (Thickness Control)
-Before calculating loads, verify the slab thickness (h) meets code minimums to avoid deflection checks.
-• Minimum Thickness: Generally *h≥80mm* (or 120 mm for trafficable areas).
-• One-way Control: *h≥Ln/30*.
-• Two-way Control: Based on the D0U2 formula: *h≥ (Lsn/(15+20/m))​⋅(1−αs/4)*.
-​
-3. Load Analysis
-• Dead Loads (g): Calculate self-weight *(h×25 kN/m³)*, coating, and plaster weights *(γc = 25kN/m3)*.
-• Live Loads (q): Assign based on occupancy (e.g., 5.0 kN/m² for commercial/industrial).
-• Factored Load (pd): Use the Turkish standard combination: *pd=1.4g+1.6q* (Kn/m2).
+## Features
 
-4. Structural Analysis (Analysis Module)
-A. Coefficient Method (DO1U/D0U2 Etudes)
-• One-way: Apply coefficients (1/11,1/15,1/8, etc.) if *q/g≤2* and span ratios are within 0.8 *(Lmin/Lmax > 0.8)*.
-• Two-way: Retrieve α moment coefficients from the ABAK tables based on support conditions (e.g., four edges continuous vs. one edge discontinuous).
-• Formula: *Md=α⋅pd⋅Lsn^2*.
+*   **Multi-Slab System Solver:** Handles complex layouts with multiple adjacent slabs.
+*   **Automatic Moment Balancing:** Calculates moments using coefficient methods and balances them at supports (distributes difference if < 20%, takes max if > 20% or cantilever).
+*   **Support for Cantilevers (Balkon):** Correctly handles balcony static moments and their effect on adjacent slabs.
+*   **Reinforcement Selection:** Automatically selects:
+    *   **Straight Bars (Düz Donatı)**
+    *   **Bent Bars (Pilye Donatı)**
+    *   **Additional Top Bars (Ek Donatı)** at supports.
+*   **DXF Drawing Generation:** Exports professional CAD drawings (`.dxf`) compatible with AutoCAD, BricsCAD, etc.
 
-5. Reinforcement Calculation (As) using ABAK
-Integrate the tables from the ABAK_TR_2022 document to automate steel selection.
-• Effective Depth (d): d=h−cover (use d≈h−20mm for slabs).
-• Section Constant (K): K= b⋅d^2/Md, where b=1.0 m for unit width design. *b(m), d(m), Md(Knm) x 10^5 to look up ABAK*
-• Lookup (ks​): Use your code to look up the ks​ value from the ABAK table corresponding to your K and material grade (e.g., C30/S420).
-• Required Area: *As​ =ks​⋅Md/d​* (mm2/m), d(m).
+## Installation
 
-6. Detailing and Regulatory Checks
-• Minimum Reinforcement:
-    ◦ Ensure *ρ≥0.002* (for S420) in one-way slabs.
-    ◦ For two-way slabs, check *min(ρx​+ρy​)=0.0035*.
-• Spacing (s): Check that *s≤1.5h* and *s≤200mm* (short direction).
-• Secondary Reinforcement: Include Distribution Bars (Dağıtma Donatısı) *As,d = As/5* at 1/5 the area of the main bars in one-way slabs.
+1.  Clone this repository.
+2.  Install the required dependencies:
+```bash
+pip install ezdxf
+```
 
-7. Post-Processing (BDIM Database)
-Store the final outputs in a structured format:
-• Final thickness and section dimensions.
-• Reinforcement diameters and spacings (e.g., ϕ10/130).
-• Reinforcement Sketches: Automatically generate diagrams for straight and "pilye" (bent) bars.
+## How to Use
+
+The system uses a programmatic approach to define slab layouts. You create a python script (e.g., `solve_my_project.py`) to define your geometry.
+
+### 1. Define Slabs and Connections
+
+Create a new file (e.g., `project.py`) and use the `SlabSystem` class:
+
+```python
+from system_solver import SlabSystem
+from models import InputData
+from diagrams_cad import generate_system_dxf
+
+def solve():
+    # Initialize
+    system = SlabSystem()
+    
+    # Define Materials & Loads
+    h = 140.0; cover = 20.0
+    conc = "C25"; steel = "S420"
+    g = 1.5; q = 3.5
+    bw = 250.0
+
+    # Add Slabs (D1, D2, Balcony...)
+    # Case 1-7: Standard Slabs, Case 8: Cantilever
+    d1 = InputData(lx=6.0, ly=6.0, slab_case=3, slab_id="D1", ...)
+    system.add_slab("D1", d1)
+    
+    d2 = InputData(lx=6.0, ly=6.0, slab_case=3, slab_id="D2", ...)
+    system.add_slab("D2", d2)
+
+    # Define Connections (Topology)
+    # "D1's Right edge connects to D2's Left edge"
+    system.connect("D1", "right", "D2", "left")
+
+    # Solve
+    system.solve()
+    
+    # Generate Drawing
+    generate_system_dxf(system, "Project_Output.dxf")
+
+if __name__ == "__main__":
+    solve()
+```
+
+### 2. Run the Solver
+
+```bash
+python3 project.py
+```
+
+### 3. View Results
+
+*   **Console Output:** Detailed text report of moments ($M_d$), required area ($A_s$), and selected bars.
+*   **DXF File:** Open the generated `.dxf` file in any CAD software to view the reinforcement plan.
+
+## Project Structure
+
+*   `main.py`: Legacy single-slab interactive tool.
+*   `system_solver.py`: Core engine for multi-slab systems. Handles balancing and continuity.
+*   `models.py`: Data structures for inputs and results.
+*   `design.py`: TS500 coefficient method implementation.
+*   `core.py`: Reinforcement calculation logic ($K$, $k_s$, $A_s$).
+*   `diagrams_cad.py`: DXF generation engine.
+*   `solve_question_3.py`: Example solution for a 2-slab + 2-balcony system.
+
+## Supported Slab Cases (TS500)
+
+| Case | Description |
+| :--- | :--- |
+| 1 | All edges continuous |
+| 2 | One short edge discontinuous |
+| 3 | Two adjacent edges discontinuous (Corner) |
+| 4 | Two short edges discontinuous |
+| 5 | Two long edges discontinuous |
+| 6 | Three edges discontinuous |
+| 7 | Four edges discontinuous (Simple) |
+| 8 | **Cantilever (Balkon)** |
+
+## License
+
+MIT License

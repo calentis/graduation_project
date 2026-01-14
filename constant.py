@@ -92,8 +92,7 @@ K_TABLE_ROWS = [
 CONC_NODES = [25.0, 30.0, 35.0, 40.0, 45.0, 50.0]
 
 PHI_GRID = [6, 7, 8, 10, 12, 14, 16, 18, 20, 22, 24]
-S_GRID = [x / 2 for x in range(14, 41)]  # 7.0 .. 20.0 cm
-
+S_GRID = [x / 2 for x in range(14, 81)]  # 7.0 .. 40.0 cm
 M_NODES = [1.00, 1.10, 1.20, 1.30, 1.40, 1.50, 1.75, 2.00]
 
 
@@ -155,5 +154,13 @@ SLAB_CASES = {
         "short_pos": _pts([0.050, 0.057, 0.062, 0.067, 0.071, 0.075, 0.081, 0.083]),
         "long_neg": 0.0,
         "long_pos": 0.050,
+    },
+    # 8) KONSOL (BALKON)
+    8: {
+        "name": "Konsol (Balkon)",
+        "short_neg": None,
+        "short_pos": None,
+        "long_neg": 0.5,
+        "long_pos": 0.0,
     },
 }

@@ -33,7 +33,10 @@ def compute(data: InputData) -> Tuple[DesignOut, DesignOut, ThicknessCheck, Load
     # STEP 2: SLAB TYPE DETERMINATION (m = Llong_net / Lshort_net)
     # ========================================================
     m = L_long_net / L_short_net if L_short_net > 0.01 else 1.0
-    slab_type = "one_way" if m > 2.0 else "two_way"
+    if data.slab_case == 8:
+        slab_type = "one_way"
+    else:
+        slab_type = "one_way" if m > 2.0 else "two_way"
     
     # ========================================================
     # STEP 3: LOAD ANALYSIS (pd = 1.4g + 1.6q)
@@ -121,7 +124,9 @@ def compute_oneway(
     
     # Determine span type for coefficients
     slab_case = data.slab_case
-    if slab_case == 7:  # 4 edges discontinuous = simple span
+    if slab_case == 8:  # 4 edges discontinuous = simple span
+        coef_type = "cantilever"
+    elif slab_case == 7:  # 4 edges discontinuous = simple span
         coef_type = "simple"
     elif slab_case == 1:  # 4 edges continuous = both ends continuous
         coef_type = "both_ends_continuous"
@@ -133,21 +138,32 @@ def compute_oneway(
     coefs = ONEWAY_COEFFICIENTS.get(coef_type, ONEWAY_COEFFICIENTS["simple"])
     
     # Calculate moments using coefficient method
-    # M = coef * pd * Lsn² (for one-way, use long net span)
-    base = pd * (L_long_net ** 2)
+    # One-way slabs span in the SHORT direction (standard assumption).
+    # Cantilevers span in the direction of the overhang (usually Short).
+    # So we use L_short_net for the moment calculation.
+    
+    # Note: If a slab is supported on SHORT edges, it would span LONG.
+    # But TS500 definition of one-way (m>2) implies support on long edges -> spans short.
+    # We proceed with L_short_net.
+    
+    span_len = L_short_net
+    base = pd * (span_len ** 2)
     
     M_pos = coefs.get("pos", 1/8) * base
     M_neg = coefs.get("neg", 0.0) * base
     if "neg_cont" in coefs:
         M_neg = coefs["neg_cont"] * base
     
-    # Assign moments based on direction
+    # Assign moments based on SPAN direction.
+    # If x_is_long (Lx >= Ly), the Short direction is Y.
+    # So the slab spans in Y. My gets the moments.
     if x_is_long:
-        Mx_pos, My_pos = M_pos, 0.0
-        Mx_neg, My_neg = M_neg, 0.0
-    else:
         Mx_pos, My_pos = 0.0, M_pos
         Mx_neg, My_neg = 0.0, M_neg
+    else:
+        # Lx < Ly. Short direction is X. Spans in X.
+        Mx_pos, My_pos = M_pos, 0.0
+        Mx_neg, My_neg = M_neg, 0.0
     
     # Minimum reinforcement: Asmin = ρ_min * b * d
     rho_min = rho_min_oneway(data.steel)
@@ -163,21 +179,21 @@ def compute_oneway(
     note_x = ""
     note_y = ""
     
-    if Mx_pos > 0:
+    if Mx_pos > 1e-9:
         Asx_req = max(Asx_M, Asmin_main)
         note_x = f"ρ_min={rho_min:.4f}, Asmin={Asmin_main:.0f}mm²/m"
     else:
         Asx_req = 0.0
         
-    if My_pos > 0:
+    if My_pos > 1e-9:
         Asy_req = max(Asy_M, Asmin_main)
         note_y = f"ρ_min={rho_min:.4f}, Asmin={Asmin_main:.0f}mm²/m"
     else:
         Asy_req = 0.0
     
     # Negative moment reinforcement
-    Asx_neg_req = max(Asx_neg_M, Asmin_main) if Mx_neg > 0 else 0.0
-    Asy_neg_req = max(Asy_neg_M, Asmin_main) if My_neg > 0 else 0.0
+    Asx_neg_req = max(Asx_neg_M, Asmin_main) if Mx_neg > 1e-9 else 0.0
+    Asy_neg_req = max(Asy_neg_M, Asmin_main) if My_neg > 1e-9 else 0.0
     
     case_name = SLAB_CASES.get(data.slab_case, SLAB_CASES[7])["name"]
     edges_note = f"Tek doğrultu: {coef_type} kabulü. {coef_msg}"
@@ -189,7 +205,8 @@ def compute_oneway(
         m=m, L_short=L_short, L_long=L_long,
         Lsn_x=Lsn_x, Lsn_y=Lsn_y,
         d_m=d_m, fck=fck, steel=data.steel,
-        a_pos=coefs.get("pos", 1/8), M_pos=Mx_pos, As_pos_req=Asx_req,
+        a_pos=coefs.get("pos", 1/8) if Mx_pos > 1e-9 else 0.0, 
+        M_pos=Mx_pos, As_pos_req=Asx_req,        
         a_neg=coefs.get("neg", 0.0), M_neg=Mx_neg, As_neg_req=Asx_neg_req,
         s_max_bottom_mm=s_max_bottom, s_max_top_mm=s_max_top,
         note_min=note_x, edges_note=edges_note
@@ -200,7 +217,7 @@ def compute_oneway(
         m=m, L_short=L_short, L_long=L_long,
         Lsn_x=Lsn_x, Lsn_y=Lsn_y,
         d_m=d_m, fck=fck, steel=data.steel,
-        a_pos=coefs.get("pos", 1/8) if My_pos > 0 else 0.0, 
+        a_pos=coefs.get("pos", 1/8) if My_pos > 1e-9 else 0.0, 
         M_pos=My_pos, As_pos_req=Asy_req,
         a_neg=coefs.get("neg", 0.0), M_neg=My_neg, As_neg_req=Asy_neg_req,
         s_max_bottom_mm=s_max_bottom, s_max_top_mm=s_max_top,

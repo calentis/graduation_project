@@ -1,7 +1,9 @@
 # ============================================================
 # core.py # Donatı seçimi ve moment-As dönüşümü
 # ============================================================
-from typing import Optional, Tuple
+from ast import Tuple
+from typing import Tuple
+from typing import Optional
 from constant import PHI_GRID
 from models import BarChoice, MainRebarLayout, MainRebarLayout
 from utils import best_spacing_for_phi, ks_from_Kcalc
@@ -49,9 +51,24 @@ def choose_main_rebar_half_half_same_phi(
 
         straight = best_spacing_for_phi(As_half, phi, s_max_main_mm, s_min_main_mm)
         pilye = best_spacing_for_phi(As_half, phi, s_max_main_mm, s_min_main_mm)
+        # For half-half layout, individual bars are spaced at 2*s_effective.
+        # So we allow the component spacing to go up to 2*s_max_main.
+        # However, we must ensure the *effective* spacing (s_comp/2) meets s_max.
+        # best_spacing_for_phi checks against the limit passed to it.
+        # So we pass s_max_main_mm * 2.
+        
+        s_max_component = s_max_main_mm * 2
+        
+        straight = best_spacing_for_phi(As_half, phi, s_max_component, s_min_main_mm)
+        pilye = best_spacing_for_phi(As_half, phi, s_max_component, s_min_main_mm)
+        
         if straight is None or pilye is None:
             continue
 
+            
+        # Check if they have the same spacing (usually preferred)
+        # If best_spacing_for_phi returns optimal spacing for As_half, they should be identical.
+        
         As_prov = straight.As_prov_mm2_per_m + pilye.As_prov_mm2_per_m
         ratio = As_prov / As_req_mm2_per_m
         cand = MainRebarLayout(straight, pilye, As_prov, As_req_mm2_per_m, ratio)
