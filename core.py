@@ -1,8 +1,7 @@
 # ============================================================
 # core.py # Donatı seçimi ve moment-As dönüşümü
 # ============================================================
-from ast import Tuple
-from typing import Optional
+from typing import Optional, Tuple
 from constant import PHI_GRID
 from models import BarChoice, MainRebarLayout, MainRebarLayout
 from utils import best_spacing_for_phi, ks_from_Kcalc
