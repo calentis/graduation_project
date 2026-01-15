@@ -5,7 +5,7 @@ from core import choose_single_layer_rebar, calc_K_and_As_from_M
 from diagrams_cad import generate_system_dxf
 
 def run_question_3_detailed():
-    print("Soru Çözümü (Görseldeki Simetrik Sistem) - Detaylı Analiz")
+    print("Soru Çözümü - Detaylı Analiz")
     print("==========================================================")
     
     system = SlabSystem()
