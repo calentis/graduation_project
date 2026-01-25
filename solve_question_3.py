@@ -4,19 +4,39 @@ from models import InputData
 from core import choose_single_layer_rebar, calc_K_and_As_from_M
 from diagrams_cad import generate_system_dxf
 
+def get_input(prompt, default, value_type=str):
+    """Get user input with a default value."""
+    user_input = input(f"{prompt} [{default}]: ").strip()
+    if not user_input:
+        return default
+    try:
+        return value_type(user_input)
+    except ValueError:
+        print(f"  Geçersiz değer, varsayılan kullanılıyor: {default}")
+        return default
+
 def run_question_3_detailed():
     print("Soru Çözümü - Detaylı Analiz")
     print("==========================================================")
+    print("\n--- BAŞLANGIÇ PARAMETRELERİ ---")
+    print("(Varsayılanı kabul etmek için Enter'a basın)\n")
+    
+    # Interactive inputs
+    conc = get_input("Beton sınıfı (örn: C20, C25, C30)", "C25", str)
+    steel = get_input("Çelik sınıfı (örn: S420, S500)", "S420", str)
+    g_add = get_input("Ek sabit yük g (kN/m²)", 1.5, float)
+    q = get_input("Hareketli yük q (kN/m²)", 3.5, float)
+    h = get_input("Döşeme kalınlığı h (mm)", 140.0, float)
+    cover = get_input("Pas payı (mm)", 20.0, float)
+    bw = get_input("Kiriş genişliği (mm)", 250.0, float)
+    
+    print("\n--- SEÇİLEN DEĞERLER ---")
+    print(f"  Beton: {conc}, Çelik: {steel}")
+    print(f"  g_add: {g_add} kN/m², q: {q} kN/m²")
+    print(f"  h: {h} mm, Pas payı: {cover} mm, Kiriş: {bw} mm")
+    print("==========================================================\n")
     
     system = SlabSystem()
-    
-    h = 140.0
-    cover = 20.0
-    conc = "C25" 
-    steel = "S420"
-    g_add = 1.5
-    q = 3.5
-    bw = 250.0
     
     # --- SLAB DEFINITIONS (Same as before) ---
     d1_l = InputData(lx=6.0, ly=6.0, beam_w_left_x=bw, beam_w_right_x=bw, beam_w_left_y=bw, beam_w_right_y=bw, h_mm=h, cover_mm=cover, concrete=conc, steel=steel, g_additional=g_add, q_live=q, slab_case=3, slab_id="D1_Sol")
